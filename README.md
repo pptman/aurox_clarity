@@ -1,7 +1,7 @@
 # clarity_processor
 Calibration and processing for Aurox Clarity microscopy data
 
-This will be 2 classes written in Python for controlling the AUrox Clarity instrument over usb HID and for processing image data obtained using the Clarity instrument.
+This will be 2 classes written in Python for controlling the Aurox Clarity instrument over usb HID and for processing image data obtained using the Clarity instrument.
  
 The first class in clarity_control.py is for controlling the clarity instrument.  It uses the python hidapi module (hydapi-cython to be exact) to give access to the usb hid interface that we use to talk to the clarity unit.  Hid is good as it uses system drivers on all operating systems, but accessing hid devices from software on the host can be complex, so we think that this hidapi interface is the simplest we have found.  There are only a few commands you will need and we will put function members in for those though It should be pretty obvious how it all works.  You use this class to select filter positions, disk positions etc. and get status reports from the unit.  The hidapi module is just a wrapper for the hidapi c-library so the whole class can be can be converted to C or C++ relatively easily.
  

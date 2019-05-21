@@ -2,6 +2,8 @@ import hid
 
 VENDORID	=0x1F0A
 PIDRUN		=0x0088
+#VENDORID	=0x136e
+#PIDRUN		=0x1088
 
 #general status/action values
 SLEEP		=0x7f			#device in sleep mode
@@ -67,8 +69,8 @@ class clarity_controller:
             self.hiddevice.open(vendor_id=VENDORID, product_id=PIDRUN)
             self.hiddevice.set_nonblocking(0)
             self.isOpen = True  # hid device open
-        except IOError, ex:
-            print ex
+        except (IOError, ex):
+            print(ex)
             self.hiddevice.close()
 
     def close(self):
@@ -132,7 +134,8 @@ class clarity_controller:
 
     # Set Clarity's calibration LED on or off
     def setCalibrationLED(self, calLED):
-        if (calLED != CALOFF) | (calLED != CALON):
+        if (calLED != CALOFF) & (calLED != CALON):
+            print(calLED)
             return -1
         res = self.sendCommand(SETCAL, calLED)
         return res[0]
@@ -143,7 +146,7 @@ class clarity_controller:
         return res[1]
 
     # Get Clarity's door status
-    def getCalibrationLED(self):
+    def getDoor(self):
         res = self.sendCommand(GETDOOR)
         return res[1]
 

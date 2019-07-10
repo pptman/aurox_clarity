@@ -43,17 +43,14 @@ class clarity_processor:
         im = np.uint8(cal_img*normVal)
 
         # find spots in left image
-
         keypoints_l = detector.detect(im[:,0:self.width])
         nl = len(keypoints_l)
-
         posl = np.asarray([ keypoints_l[i].pt for i in range(nl) ])
         d=5             # reject points found within d pixels of image edge
         posl = posl[(posl[:,0]>d)&(posl[:,0]<(self.width-d))&(posl[:,1]>d)&(posl[:,1]<(self.height-d)),:]
         nl = len(posl)
 
         # find spots in right image
-
         keypoints_r = detector.detect(im[:,self.width:])
         nr = len(keypoints_r)
 
@@ -82,7 +79,6 @@ class clarity_processor:
         distnumr=np.sum((distmr>dlowr)&(distmr<dhir),0)
 
         # find left 6-way co-ordinated spots
-
         pos6l=posl[distnuml==6,:]  # positions on left that are 6-way co-ordinated
         indxl=np.arange(nl)
         diffl=np.zeros((nl,2))
@@ -94,7 +90,6 @@ class clarity_processor:
         n6l = len(pos6l)                                        # number of 6-way coordinated points
 
         # find right 6-way co-ordinated spots
-
         pos6r=posr[distnumr==6,:]  # positions on right that are 6-way co-ordinated
         indxr=np.arange(nr)
         diffr=np.zeros((nr,2))
@@ -106,7 +101,6 @@ class clarity_processor:
         n6r = len(pos6r)                                        # number of 6-way coordinated points
 
         # find matched 6-way co-ordinated spot pairs
-
         pmatch6l = []
         pmatch6r = []
 
@@ -122,11 +116,9 @@ class clarity_processor:
         pmatch6r=np.reshape(pmatch6r,(nmatch6,2))
 
         # find affine transform based on 6-way matches
-
         [retval, map6]=cv2.solve(np.c_[pmatch6r,np.ones(nmatch6)],pmatch6l,flags=cv2.DECOMP_SVD)
 
         # transform all right spot positions to find matches on left
-
         posrt=np.matmul(np.c_[posr,np.ones(nr)],map6)
 
         pmatchl=[]
@@ -152,15 +144,61 @@ class clarity_processor:
 
         [x, y] = np.meshgrid(np.arange(self.width),np.arange(self.height))
 
-        defXcpu = np.float32(map[0,0]+map[1,0]*x+map[2,0]*y+map[3,0]*x*x+map[4,0]*y*y+map[5,0]*x*y+map[6,0]*x*x*y+map[7,0]*x*y*y+map[8,0]*x*x*x+map[9,0]*y*y*y)
-        defYcpu = np.float32(map[0,1]+map[1,1]*x+map[2,1]*y+map[3,1]*x*x+map[4,1]*y*y+map[5,1]*x*y+map[6,1]*x*x*y+map[7,1]*x*y*y+map[8,1]*x*x*x+map[9,1]*y*y*y)
+        self.defXcpu = np.float32(map[0,0]+map[1,0]*x+map[2,0]*y+map[3,0]*x*x+map[4,0]*y*y+map[5,0]*x*y+map[6,0]*x*x*y+map[7,0]*x*y*y+map[8,0]*x*x*x+map[9,0]*y*y*y)
+        self.defYcpu = np.float32(map[0,1]+map[1,1]*x+map[2,1]*y+map[3,1]*x*x+map[4,1]*y*y+map[5,1]*x*y+map[6,1]*x*x*y+map[7,1]*x*y*y+map[8,1]*x*x*x+map[9,1]*y*y*y)
 
-        self.defX = cv2.UMat(defXcpu)
-        self.defY = cv2.UMat(defYcpu)
+        self.defX = cv2.UMat(self.defXcpu)
+        self.defY = cv2.UMat(self.defYcpu)
 
     def process(self, img, sub_factor=1.0):
+        # Takes 1 combined numpy (Mat) array and converts to UMat on the fly from numpy subimages
+        # OPENCV transparent interface will use OPENCL for processing
+        # Approx 9.2 ms processing time on macbook pro (i7 + Intel Iris Pro)
         result = cv2.subtract(cv2.UMat(img[:,0:self.width]),
                               cv2.remap(cv2.multiply(cv2.UMat(img[:,self.width:]),sub_factor),self.defX,self.defY,cv2.INTER_LINEAR,
+                                                     borderMode=cv2.BORDER_CONSTANT,borderValue=0))
+        return result
+
+    def process_gpu1(self, img_l, img_r, sub_factor=1.0):
+        # Takes 2 UMat images as arguments,
+        # OPENCV transparent interface will use OPENCL for processing
+        # Approx 2.8 ms processing time on macbook pro (i7 + Intel Iris Pro), but your images need to be separate UMats already
+        result = cv2.subtract(img_l,
+                              cv2.remap(cv2.multiply(img_r,sub_factor),self.defX,self.defY,cv2.INTER_LINEAR,
+                                                     borderMode=cv2.BORDER_CONSTANT,borderValue=0))
+        return result
+
+    def process_gpu2(self, img, sub_factor=1.0):
+        # Takes 1 combined numpy (Mat) array and converts to UMat on the fly
+        # Converts combined image to UMat on gpu then transparent interface produces 2 sub image UMats in OPENCL
+        # OPENCV transparent interface will use OPENCL for processing
+        # Approx 3.2 ms processing time on macbook pro (i7 + Intel Iris Pro)
+        uimg = cv2.UMat(img)
+        img_l = cv2.UMat(uimg, (0, self.height), (0, self.width))
+        img_r = cv2.UMat(uimg, (0, self.height), (self.width, 2*self.width))
+        result = cv2.subtract(img_l,
+                              cv2.remap(cv2.multiply(img_r,sub_factor),self.defX,self.defY,cv2.INTER_LINEAR,
+                                                     borderMode=cv2.BORDER_CONSTANT,borderValue=0))
+        return result
+
+    def process_gpu3(self, img, sub_factor=1.0):
+        # Takes 1 combined numpy (Mat) array and converts to UMat on the fly
+        # Converts combined image to UMat on gpu then transparent interface produces 2 sub image UMats in OPENCL
+        # OPENCV transparent interface will use OPENCL for processing, uses scaleAdd routine for subtraction step
+        # Approx 2.7 ms processing time on macbook pro (i7 + Intel Iris Pro)
+        uimg = cv2.UMat(img)
+        img_l = cv2.UMat(uimg, (0, self.height), (0, self.width))
+        img_r = cv2.UMat(uimg, (0, self.height), (self.width, 2*self.width))
+        result = cv2.scaleAdd(cv2.remap(img_r,self.defX,self.defY,cv2.INTER_LINEAR,borderMode=cv2.BORDER_CONSTANT,borderValue=0),
+                              -sub_factor,img_l)
+        return result
+
+    def process_cpu(self, img, sub_factor=1.0):
+        # Takes 1 combined numpy (Mat) array and converts to UMat on the fly from numpy subimages
+        # OPENCV transparent interface will use OPENCL for processing
+        # Approx 7.2 ms processing time on macbook pro (i7 + Intel Iris Pro)
+        result = cv2.subtract(img[:,0:self.width],
+                              cv2.remap(cv2.multiply(img[:,self.width:],sub_factor),self.defXcpu,self.defYcpu,cv2.INTER_LINEAR,
                                                      borderMode=cv2.BORDER_CONSTANT,borderValue=0))
         return result
 

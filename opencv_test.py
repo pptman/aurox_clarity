@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import clarity_process as cproc
+import time
 
 
 # Try first calibration image
@@ -43,6 +44,7 @@ print('Processing time ',t)
 
 # Original code (runs on GPU)
 # Pass numpy image, take subimages then convert to UMat
+time.sleep(5)
 e0 = cv2.getTickCount()
 
 for i in range(5000) :
@@ -54,6 +56,7 @@ t = (e1 - e0)/cv2.getTickFrequency()
 print('5000 original gpu loop ',t/5,' ms')
 
 # Original code (runs on CPU)
+time.sleep(5)
 e0 = cv2.getTickCount()
 
 for i in range(5000) :
@@ -63,7 +66,44 @@ e1 = cv2.getTickCount()
 t = (e1 - e0)/cv2.getTickFrequency()
 print('5000 cpu loop ',t/5,' ms')
 
+# GPU, passing 1 numpy image, convert to UMat, then take subimages
+time.sleep(5)
+e0 = cv2.getTickCount()
+
+for i in range(5000) :
+    res2=cp2.process_gpu2(img2,0.95)
+
+e1 = cv2.getTickCount()
+
+t = (e1 - e0)/cv2.getTickFrequency()
+print('5000 gpu2 loop ',t/5,' ms')
+
+# GPU, passing 1 numpy image, convert to UMat, then take subimages, use scaleAdd routine
+time.sleep(5)
+e0 = cv2.getTickCount()
+
+for i in range(5000) :
+    res2=cp2.process_gpu3(img2,0.95)
+
+e1 = cv2.getTickCount()
+
+t = (e1 - e0)/cv2.getTickFrequency()
+print('5000 gpu3 loop ',t/5,' ms')
+
+# CPU, passing 1 numpy image, multiply and add
+time.sleep(5)
+e0 = cv2.getTickCount()
+
+for i in range(5000) :
+    res2=cp2.process_cpu1(img2,0.95)
+
+e1 = cv2.getTickCount()
+
+t = (e1 - e0)/cv2.getTickFrequency()
+print('5000 cpu1 loop ',t/5,' ms')
+
 # GPU but passing 2 UMat images
+time.sleep(5)
 width=int(np.size(img2,1)/2)
 img_l=cv2.UMat(img2[:,0:width])
 img_r=cv2.UMat(img2[:,width:])
@@ -76,28 +116,6 @@ e1 = cv2.getTickCount()
 
 t = (e1 - e0)/cv2.getTickFrequency()
 print('5000 gpu1 loop ',t/5,' ms')
-
-# GPU, passing 1 numpy image, convert to UMat, then take subimages
-e0 = cv2.getTickCount()
-
-for i in range(5000) :
-    res2=cp2.process_gpu2(img2,0.95)
-
-e1 = cv2.getTickCount()
-
-t = (e1 - e0)/cv2.getTickFrequency()
-print('5000 gpu2 loop ',t/5,' ms')
-
-# GPU, passing 1 numpy image, convert to UMat, then take subimages, use scaleAdd routine
-e0 = cv2.getTickCount()
-
-for i in range(5000) :
-    res2=cp2.process_gpu3(img2,0.95)
-
-e1 = cv2.getTickCount()
-
-t = (e1 - e0)/cv2.getTickFrequency()
-print('5000 gpu2 loop ',t/5,' ms')
 
 res3 = cp.process(img2,0.95)
 cv2.imshow('Wrong calibration!',cv2.multiply(res3,10))

@@ -10,7 +10,7 @@ cv2.imshow('input image',img)
 
 e0 = cv2.getTickCount()
 
-cp = cproc.clarity_processor(img)
+cp = cproc.ClarityProcessor(img)
 
 e1 = cv2.getTickCount()
 
@@ -30,7 +30,7 @@ cv2.imshow('Registered and subtracted image',result)
 # Try second test calibration image
 img2 = cv2.imread('calib_rot_h.tiff',cv2.IMREAD_GRAYSCALE)
 e0 = cv2.getTickCount()
-cp2 = cproc.clarity_processor(img2)
+cp2 = cproc.ClarityProcessor(img2)
 e1 = cv2.getTickCount()
 res2 = cp2.process_gpu3(img2,0.95)
 e2 = cv2.getTickCount()

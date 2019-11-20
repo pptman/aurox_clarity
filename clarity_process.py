@@ -1,113 +1,134 @@
 import numpy as np
 import cv2
 
-class clarity_processor:
-    width = 0
-    height = 0
-    defX = cv2.UMat()
-    defY = cv2.UMat()
+class ClarityProcessor:
+    # Setup SimpleBlobDetector parameters - constant, so shared between instances.
+    _params = cv2.SimpleBlobDetector_Params()
 
-    def __init__(self,cal_img):
+    # Change thresholds
+    _params.minThreshold = 10
+    _params.maxThreshold = 120
+    _params.thresholdStep = 5
+
+    _params.filterByColor = True
+    _params.blobColor = 255
+
+    # Filter by Area.
+    _params.filterByArea = True
+    _params.minArea = 10
+    _params.maxArea = 40
+
+    # Filter by Circularity
+    _params.filterByCircularity = True
+    _params.minCircularity = 0.1
+    _params.maxCircularity = 1.0
+
+    # Filter by Convexity
+    _params.filterByConvexity = True
+    _params.minConvexity = 0.5
+    _params.maxConvexity = 1.0
+
+    # Also share blob detector between instances - resource footprint seems to be negligible.
+    _detector = cv2.SimpleBlobDetector_create(_params)
+
+    @classmethod
+    def _find_spots(cls, img, border=5):
+        """Find all spots in img, excluding those within border of the edges.
+
+        Parameters
+        ----------
+        img : array-like
+            an image containing spots
+        border : int
+            The width of a border, in pixels.
+
+        Returns
+        -------
+        pos : array([[float, float],])
+            An array of cartesian positions for spots found in the image,
+            excluding those that lie within the border region.
+        """
+        keypoints = cls._detector.detect(img)
+        n = len(keypoints)
+        pos = np.asarray([ keypoints[i].pt for i in range(n) ])
+        h, w = img.shape
+        return pos[(pos[:,0] > border) &
+                   (pos[:,0] < (w - border)) &
+                   (pos[:,1] > border) &
+                   (pos[:,1] < (h - border))
+                   ,:]
+
+    @staticmethod
+    def _find_penrose(pos):
+        """Find Penrose groups in a set of spots.
+
+        Parameters
+        ----------
+        pos : array-like [[float, float],]
+            A list of co-ordinate pairs defining cartesion spot positions.
+
+        Returns
+        -------
+        dmid : float
+            mean radius of penrose stars
+
+        pos6 : array([[float, float],])
+            Positions of the central point in each Penrose group.
+
+        c_offset : array([[float, float],])
+            Offset between central spot and centroid of each Penrose group.
+
+
+        """
+        n = len(pos)
+        # Detemrine spot-spot separations
+        sep = np.zeros((n, n))
+        for i in range(n):
+            sep[i,:] = np.hypot(*(pos - pos[i]).T)
+        # Determine threshold based on distribution of spot separations.
+        dmid = np.sort(sep.ravel())[int(3.5 * n)]
+        dlow = 0.91 * dmid
+        dhi = 1.09 * dmid
+        # number of neighbours between threshold distances from each spot
+        neighbourcount = np.sum((sep > dlow) & (sep < dhi), 0)
+        # Indices of 6-way co-ordianted spots.
+        indices = np.flatnonzero(neighbourcount == 6)
+        # Positions of 6-way co-ordinated spots at centre of 7-spot clusters.
+        pos6 = pos[indices]
+        # Find offset between each 6-way co-ordinated point and centroid of its neighbours.
+        c_offset = np.empty_like(pos6)
+        for i, idx in enumerate(indices):
+            neighbours = np.flatnonzero((sep[idx,:] > dlow) & (sep[idx,:] < dhi))
+            c_offset[i] = np.sum(pos[neighbours] - pos[idx], axis=0)
+        return (dmid, pos6, c_offset)
+
+
+    def __init__(self, cal_img):
         self.width = int(np.size(cal_img,1)/2)
         self.height = np.size(cal_img,0)
+        normVal = 255.0 / np.max(cal_img)
+        im = np.uint8(cal_img * normVal)
 
-        # Setup SimpleBlobDetector parameters.
-        params = cv2.SimpleBlobDetector_Params()
-
-        # Change thresholds
-        params.minThreshold = 10
-        params.maxThreshold = 120
-        params.thresholdStep = 5
-
-        params.filterByColor = True
-        params.blobColor = 255
-
-        # Filter by Area.
-        params.filterByArea = True
-        params.minArea = 10
-        params.maxArea = 40
-
-        # Filter by Circularity
-        params.filterByCircularity = True
-        params.minCircularity = 0.1
-        params.maxCircularity = 1.0
-
-        # Filter by Convexity
-        params.filterByConvexity = True
-        params.minConvexity = 0.5
-        params.maxConvexity = 1.0
-
-        detector = cv2.SimpleBlobDetector_create(params)
-
-        normVal = 255.0/np.max(cal_img)
-        im = np.uint8(cal_img*normVal)
-
-        # find spots in left image
-        keypoints_l = detector.detect(im[:,0:self.width])
-        nl = len(keypoints_l)
-        posl = np.asarray([ keypoints_l[i].pt for i in range(nl) ])
-        d=5             # reject points found within d pixels of image edge
-        posl = posl[(posl[:,0]>d)&(posl[:,0]<(self.width-d))&(posl[:,1]>d)&(posl[:,1]<(self.height-d)),:]
+        # find all spots in left and right images
+        posl = self._find_spots(im[:, 0:self.width])
         nl = len(posl)
+        posr = self._find_spots(im[:, self.width:])
+        nr = len(posr)
 
-        # find spots in right image
-        keypoints_r = detector.detect(im[:,self.width:])
-        nr = len(keypoints_r)
-
-        posr = np.asarray([ keypoints_r[i].pt for i in range(nr) ])
-        posr = posr[(posr[:,0]>d)&(posr[:,0]<(self.width-d))&(posr[:,1]>d)&(posr[:,1]<(self.height-d)),:]
-        nr=len(posr)
-
-        # find spots' nearest neighbours left
-        distml=np.zeros((nl,nl))
-        for i in range(nl):
-            distml[i,:] = np.hypot(posl[:,0]-posl[i,0],posl[:,1]-posl[i,1])
-        dlsort=np.sort(distml.ravel())
-        dmidl=dlsort[int(3.5*nl)]
-        dlowl=0.91*dmidl
-        dhil=1.09*dmidl
-        distnuml=np.sum((distml>dlowl)&(distml<dhil),0)
-
-        # find spots' nearest neighbours right
-        distmr=np.zeros((nr,nr))
-        for i in range(nr):
-            distmr[i,:] = np.hypot(posr[:,0]-posr[i,0],posr[:,1]-posr[i,1])
-        drsort=np.sort(distmr.ravel())
-        dmidr=drsort[int(3.5*nr)]
-        dlowr=0.91*dmidr
-        dhir=1.09*dmidr
-        distnumr=np.sum((distmr>dlowr)&(distmr<dhir),0)
-
-        # find left 6-way co-ordinated spots
-        pos6l=posl[distnuml==6,:]  # positions on left that are 6-way co-ordinated
-        indxl=np.arange(nl)
-        diffl=np.zeros((nl,2))
-        for i in indxl[distnuml==6] :                           # iterate over 6-way co-ordinated points
-            distindx=(distml[i,:]>dlowl)&(distml[i,:]<dhil)     # the points that are required distance from current point
-            diffl[i,:]=np.sum(posl[distindx,:]-posl[i,:],0)     # find centroid of the 6 co-ordinated points relative to current
-
-        diff6l=diffl[indxl[distnuml==6],:]                      # a list of just the centroids of 6 co-ordinated points
-        n6l = len(pos6l)                                        # number of 6-way coordinated points
-
-        # find right 6-way co-ordinated spots
-        pos6r=posr[distnumr==6,:]  # positions on right that are 6-way co-ordinated
-        indxr=np.arange(nr)
-        diffr=np.zeros((nr,2))
-        for i in indxr[distnumr==6] :                           # iterate over 6-way co-ordinated points
-            distindx=(distmr[i,:]>dlowr)&(distmr[i,:]<dhir)     # the points that are required distance from current point
-            diffr[i,:]=np.sum(posr[distindx,:]-posr[i,:],0)     # find centroid of the 6 co-ordinated points relative to current
-
-        diff6r=diffr[indxr[distnumr==6],:]                      # a list of just the centroids of 6 co-ordinated points
-        n6r = len(pos6r)                                        # number of 6-way coordinated points
+        # Reduce parameter-space for determining the affine transform by finding
+        # 6-way co-ordinated spots that lie at the centre of Penrose stars.
+        # Find star radius, central spot positions, and centroid offsets for left and right images.
+        (dmidl, pos6l, diff6l) = self._find_penrose(posl)
+        (dmidr, pos6r, diff6r) = self._find_penrose(posr)
 
         # find matched 6-way co-ordinated spot pairs
         pmatch6l = []
         pmatch6r = []
 
-        for i in range(n6l) :                                   # loop over all 6-way co-ordinated left spots
+        for i in range(len(pos6l)):  # loop over all 6-way co-ordinated left spots
              dist6=np.hypot(pos6r[:,1]-pos6l[i,1],self.width-1-pos6r[:,0]-pos6l[i,0]); # the distance of all right spots from this left spot
              distoffs=np.hypot(diff6l[i,1]-diff6r[:,1],diff6l[i,0]+diff6r[:,0]);   # the distance between the right and left 6-spot centroids
-             for j in range(n6r) :                              # loop over all 6-way co-ordinated spots on right
+             for j in range(len(pos6r)) :                              # loop over all 6-way co-ordinated spots on right
                  if (dist6[j]<4*dmidl)&(distoffs[j]<dmidl/4) :  # select spots as pairs if they are close enough and if the centroids are close enough
                      pmatch6l=np.append(pmatch6l,pos6l[i,:]);   # add to list of left and right matched spots
                      pmatch6r=np.append(pmatch6r,pos6r[j,:]);
@@ -116,15 +137,15 @@ class clarity_processor:
         pmatch6r=np.reshape(pmatch6r,(nmatch6,2))
 
         # find affine transform based on 6-way matches
-        [retval, map6]=cv2.solve(np.c_[pmatch6r,np.ones(nmatch6)],pmatch6l,flags=cv2.DECOMP_SVD)
+        [retval, p_affine]=cv2.solve(np.c_[pmatch6r,np.ones(nmatch6)],pmatch6l,flags=cv2.DECOMP_SVD)
 
         # transform all right spot positions to find matches on left
-        posrt=np.matmul(np.c_[posr,np.ones(nr)],map6)
+        posrt=np.matmul(np.c_[posr,np.ones(nr)], p_affine)
 
         pmatchl=[]
         pmatchr=[]
         for i in range(nl):
-            dist = np.hypot(posl[i,1]-posrt[:,1],posl[i,0]-posrt[:,0])
+            dist = np.hypot(*(posl[i]-posrt).T)
             mind = min(dist)
             if (mind<5) :
                 pmatchl=np.append(pmatchl,posl[i,:])
@@ -134,19 +155,30 @@ class clarity_processor:
         pmatchl=np.reshape(pmatchl,(nmatch,2))
         pmatchr=np.reshape(pmatchr,(nmatch,2))
 
-        # find polynomial transform for all matched pairs
-        # 1, x, y, x^2, y^2, x*y, x^2*y, x*y^2, x^3, y^3
-        rmat=np.c_[np.ones(nmatch),pmatchl,pmatchl*pmatchl, pmatchl[:,0]*pmatchl[:,1],
-                   pmatchl[:,0]*pmatchl[:,0]*pmatchl[:,1], pmatchl[:,0]*pmatchl[:,1]*pmatchl[:,1], pmatchl*pmatchl*pmatchl]
-        [retval, map]=cv2.solve(rmat,pmatchr,flags=cv2.DECOMP_SVD)
+        # Determine polynomial transform for all matched pairs
+        # Sum terms: 1, x, y, x^2, y^2, x*y, x^2*y, x*y^2, x^3, y^3
+        # Use polygrid2d: ~5x quicker, may avoid fp error accumulation,
+        # gives same result to within < 1ppm.
+        from numpy.polynomial.polynomial import polygrid2d
+        p1 = np.ones(nmatch)
+        px = pmatchl[:,0]
+        py = pmatchl[:,1]
+        rmatp = np.c_[p1, py, py*py, py*py*py, px, px*py,
+                      px*py*py, px*px, px*px*py, px*px*px]
+        [retval, pcoeffs_raw]=cv2.solve(rmatp,pmatchr,flags=cv2.DECOMP_SVD)
+        # Put raw coeffs into matrix such that element [i,j] holds Cij in
+        # poly = sum (Cij * x^i * y^j).
+        pcoeffs = np.zeros((4,4,2))
+        pcoeffs[(0,0,0,0,1,1,1,2,2,3), (0,1,2,3,0,1,2,0,1,0),:] = pcoeffs_raw
+        xs = np.arange(self.width)
+        ys = np.arange(self.height)
+        deformation = polygrid2d(xs, ys, pcoeffs).T.astype(np.float32)
 
-        # find deformation maps
+        # Convential memory deformation map
+        self.defXcpu = deformation[..., 0]
+        self.defYcpu = deformation[..., 1]
 
-        [x, y] = np.meshgrid(np.arange(self.width),np.arange(self.height))
-
-        self.defXcpu = np.float32(map[0,0]+map[1,0]*x+map[2,0]*y+map[3,0]*x*x+map[4,0]*y*y+map[5,0]*x*y+map[6,0]*x*x*y+map[7,0]*x*y*y+map[8,0]*x*x*x+map[9,0]*y*y*y)
-        self.defYcpu = np.float32(map[0,1]+map[1,1]*x+map[2,1]*y+map[3,1]*x*x+map[4,1]*y*y+map[5,1]*x*y+map[6,1]*x*x*y+map[7,1]*x*y*y+map[8,1]*x*x*x+map[9,1]*y*y*y)
-
+        # GPU memory deformation map
         self.defX = cv2.UMat(self.defXcpu)
         self.defY = cv2.UMat(self.defYcpu)
 

@@ -175,8 +175,8 @@ class ClarityProcessor:
         deformation = polygrid2d(xs, ys, pcoeffs).T.astype(np.float32)
 
         # Convential memory deformation map
-        self.defXcpu = deformation[..., 0]
-        self.defYcpu = deformation[..., 1]
+        self.defXcpu = deformation[..., 0].copy()
+        self.defYcpu = deformation[..., 1].copy()
 
         # GPU memory deformation map
         self.defX = cv2.UMat(self.defXcpu)

@@ -3,7 +3,7 @@ import cv2
 import clarity_process as cproc
 import time
 
-N=100
+N=1000
 
 # Try first calibration image
 img = cv2.imread('calib_h.tiff',cv2.IMREAD_GRAYSCALE)

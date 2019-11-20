@@ -3,6 +3,7 @@ import cv2
 import clarity_process as cproc
 import time
 
+N=100
 
 # Try first calibration image
 img = cv2.imread('calib_h.tiff',cv2.IMREAD_GRAYSCALE)
@@ -47,60 +48,60 @@ print('Processing time ',t)
 time.sleep(5)
 e0 = cv2.getTickCount()
 
-for i in range(5000) :
+for i in range(N) :
     res2=cp2.process(img2,0.95)
 
 e1 = cv2.getTickCount()
 
 t = (e1 - e0)/cv2.getTickFrequency()
-print('5000 original gpu loop ',t/5,' ms')
+print(N,'original gpu loop ',1000*t/N,' ms')
 
 # Original code (runs on CPU)
 time.sleep(5)
 e0 = cv2.getTickCount()
 
-for i in range(5000) :
+for i in range(N) :
     res2=cp2.process_cpu(img2,0.95)
 
 e1 = cv2.getTickCount()
 t = (e1 - e0)/cv2.getTickFrequency()
-print('5000 cpu loop ',t/5,' ms')
+print(N,'cpu loop ',1000*t/N,' ms')
 
 # GPU, passing 1 numpy image, convert to UMat, then take subimages
 time.sleep(5)
 e0 = cv2.getTickCount()
 
-for i in range(5000) :
+for i in range(N) :
     res2=cp2.process_gpu2(img2,0.95)
 
 e1 = cv2.getTickCount()
 
 t = (e1 - e0)/cv2.getTickFrequency()
-print('5000 gpu2 loop ',t/5,' ms')
+print(N,'gpu2 loop ',1000*t/N,' ms')
 
 # GPU, passing 1 numpy image, convert to UMat, then take subimages, use scaleAdd routine
 time.sleep(5)
 e0 = cv2.getTickCount()
 
-for i in range(5000) :
+for i in range(N) :
     res2=cp2.process_gpu3(img2,0.95)
 
 e1 = cv2.getTickCount()
 
 t = (e1 - e0)/cv2.getTickFrequency()
-print('5000 gpu3 loop ',t/5,' ms')
+print(N,'gpu3 loop ',1000*t/N,' ms')
 
 # CPU, passing 1 numpy image, multiply and add
 time.sleep(5)
 e0 = cv2.getTickCount()
 
-for i in range(5000) :
+for i in range(N) :
     res2=cp2.process_cpu1(img2,0.95)
 
 e1 = cv2.getTickCount()
 
 t = (e1 - e0)/cv2.getTickFrequency()
-print('5000 cpu1 loop ',t/5,' ms')
+print(N,'cpu1 loop ',1000*t/N,' ms')
 
 # GPU but passing 2 UMat images
 time.sleep(5)
@@ -109,13 +110,13 @@ img_l=cv2.UMat(img2[:,0:width])
 img_r=cv2.UMat(img2[:,width:])
 e0 = cv2.getTickCount()
 
-for i in range(5000) :
+for i in range(N) :
     res2=cp2.process_gpu1(img_l,img_r,0.95)
 
 e1 = cv2.getTickCount()
 
 t = (e1 - e0)/cv2.getTickFrequency()
-print('5000 gpu1 loop ',t/5,' ms')
+print(N,'gpu1 loop ',1000*t/N,' ms')
 
 res3 = cp.process(img2,0.95)
 cv2.imshow('Wrong calibration!',cv2.multiply(res3,10))

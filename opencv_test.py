@@ -3,10 +3,11 @@ import cv2
 import clarity_process as cproc
 import time
 
-N=1000
+N=100
 
 # Try first calibration image
 img = cv2.imread('calib_h.tiff',cv2.IMREAD_GRAYSCALE)
+# img = cv2.imread('calibration_0.png',cv2.IMREAD_GRAYSCALE)
 cv2.imshow('input image',img)
 
 e0 = cv2.getTickCount()
@@ -24,7 +25,7 @@ print('Calibration time ',t)
 t = (e2 - e1)/cv2.getTickFrequency()
 print('Processing time ',t)
 
-result=cv2.multiply(res,10)
+result=cv2.multiply(res,100)
 
 cv2.imshow('Registered and subtracted image',result)
 

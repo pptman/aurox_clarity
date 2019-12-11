@@ -9,8 +9,8 @@ PIDRUN		=0x0088
 SLEEP		=0x7f			#device in sleep mode
 RUN		    =0x0f			#device running
 
-DOOROPEN	=0x01			#door open
-DOORCLSD	=0x02			#door closed
+DOORCLSD	=0x01			#door closed
+DOOROPEN	=0x02			#door open
 
 DSKPOS0     =0x00           #disk out of beam path, wide field
 DSKPOS1		=0x01			#disk pos 1, low sectioning

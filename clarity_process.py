@@ -205,12 +205,12 @@ class clarity_processor:
                                                      borderMode=cv2.BORDER_CONSTANT,borderValue=0))
         return result
 
-    def process_cpu1(self, img, sub_factor=1.0):
+    def process_cpu1(self, img_l, img_r, sub_factor=1.0):
         # Takes 1 combined numpy (Mat) array and converts to UMat on the fly from numpy subimages
         # OPENCV transparent interface will use OPENCL for processing
         # Approx 7.2 ms processing time on macbook pro (i7 + Intel Iris Pro)
         result = cv2.scaleAdd(
-            cv2.remap(img[:,self.width:], self.defXcpu, self.defYcpu, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0),
-            -sub_factor, img[:,0:self.width])
+            cv2.remap(img_l, self.defX, self.defY, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0),
+            -sub_factor, img_r)
         return result
 

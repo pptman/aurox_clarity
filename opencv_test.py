@@ -3,7 +3,7 @@ import cv2
 import clarity_process as cproc
 import time
 
-N=100
+N=5000
 
 # Try first calibration image
 img = cv2.imread('calib_h.tiff',cv2.IMREAD_GRAYSCALE)
@@ -94,9 +94,11 @@ print(N,'gpu3 loop ',1000*t/N,' ms')
 # CPU, passing 1 numpy image, multiply and add
 time.sleep(5)
 e0 = cv2.getTickCount()
-
+width=int(np.size(img2,1)/2)
+img_cpu_l=img2[:,0:width].copy()
+img_cpu_r=img2[:,width:].copy()
 for i in range(N) :
-    res2=cp2.process_cpu1(img2,0.95)
+    res2=cp2.process_cpu1(img_cpu_l,img_cpu_r,0.95)
 
 e1 = cv2.getTickCount()
 

@@ -6,9 +6,9 @@ class ClarityProcessor:
     _params = cv2.SimpleBlobDetector_Params()
 
     # Change thresholds
-    _params.minThreshold = 10
-    _params.maxThreshold = 120
-    _params.thresholdStep = 5
+    _params.minThreshold = 20
+    _params.maxThreshold = 200
+    _params.thresholdStep = 10
 
     _params.filterByColor = True
     _params.blobColor = 255
@@ -81,12 +81,13 @@ class ClarityProcessor:
 
         """
         n = len(pos)
-        # Detemrine spot-spot separations
+        # Determine spot-spot separations
         sep = np.zeros((n, n))
         for i in range(n):
             sep[i,:] = np.hypot(*(pos - pos[i]).T)
         # Determine threshold based on distribution of spot separations.
-        dmid = np.sort(sep.ravel())[int(3.5 * n)]
+        # dmid = np.sort(sep.ravel())[int(3.5 * n)]
+        dmid = np.partition(sep.ravel(),int(3.5 * n))[int(3.5 * n)]
         dlow = 0.91 * dmid
         dhi = 1.09 * dmid
         # number of neighbours between threshold distances from each spot
@@ -106,8 +107,10 @@ class ClarityProcessor:
     def __init__(self, cal_img):
         self.width = int(np.size(cal_img,1)/2)
         self.height = np.size(cal_img,0)
-        normVal = 255.0 / np.max(cal_img)
-        im = np.uint8(cal_img * normVal)
+
+        # Normalise and convert to 8-bit
+        im = np.zeros_like(cal_img,dtype='uint8')
+        cv2.normalize(cal_img,im,0,255,cv2.NORM_MINMAX,cv2.CV_8U)
 
         # find all spots in left and right images
         posl = self._find_spots(im[:, 0:self.width])

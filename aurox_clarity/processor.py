@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 
-class ClarityProcessor:
+class Processor:
     # Setup SimpleBlobDetector parameters - constant, so shared between instances.
     _params = cv2.SimpleBlobDetector_Params()
 

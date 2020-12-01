@@ -1,7 +1,7 @@
-import clarity_control as ccon
+import aurox_clarity.controller as ccon
 import time
 
-cc=ccon.clarity_controller()
+cc=ccon.Controller()
 
 serialnum = cc.getSerialNumber()
 

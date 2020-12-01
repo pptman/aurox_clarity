@@ -60,7 +60,7 @@ SETCAL		=0x25			#1 byte out CAL led status, echoes command or SLEEP
 
 SETSVCMODE1	=0xe0			#1 byte for service mode (SLEEP activates service mode and RUN, returns unit to normal run state), echoes command
 
-class clarity_controller:
+class Controller:
 
     hiddevice = hid.device()
 

@@ -46,7 +46,7 @@ All commands sent to a Clarity device could also get a response of `CMDERROR` wh
 Usage:
 
 ```python
-import aurox_clarity
+import aurox_clarity.controller
 
 ctrl = aurox_clarity.controller.Controller()
 
@@ -90,7 +90,8 @@ The performance of these different methods can be benchmarked with the `opencv_t
 Usage:
 
 ```python
-import aurox_clarity
+import aurox_clarity.controller
+import aurox_clarity.processor
 
 ctrl = aurox_clarity.controller.Controller()
 ctrl.switchOn()

@@ -153,8 +153,8 @@ class Controller:
     # Get Clarity's serial number
     def getSerialNumber(self):
         res = self.sendCommand(GETSERIAL)
-        return ((res[4]/16)*10000000+(res[4]%16)*1000000+(res[3]/16)*100000+(res[3]%16)*10000+
-                (res[2]/16)*1000+(res[2]%16)*100+(res[1]/16)*10+(res[1]%16))
+        return ((res[4]//16)*10000000+(res[4]%16)*1000000+(res[3]//16)*100000+(res[3]%16)*10000+
+                (res[2]//16)*1000+(res[2]%16)*100+(res[1]//16)*10+(res[1]%16))
 
     # Returns 10 bytes Firmware VERSION[3], ONOFF, DOOR, DISK, FILT, CAL
     def getFullStat(self):

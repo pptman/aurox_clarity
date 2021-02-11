@@ -60,7 +60,7 @@ SETCAL		=0x25			#1 byte out CAL led status, echoes command or SLEEP
 
 SETSVCMODE1	=0xe0			#1 byte for service mode (SLEEP activates service mode and RUN, returns unit to normal run state), echoes command
 
-class clarity_controller:
+class Controller:
 
     hiddevice = hid.device()
 
@@ -153,8 +153,8 @@ class clarity_controller:
     # Get Clarity's serial number
     def getSerialNumber(self):
         res = self.sendCommand(GETSERIAL)
-        return ((res[4]/16)*10000000+(res[4]%16)*1000000+(res[3]/16)*100000+(res[3]%16)*10000+
-                (res[2]/16)*1000+(res[2]%16)*100+(res[1]/16)*10+(res[1]%16))
+        return ((res[4]//16)*10000000+(res[4]%16)*1000000+(res[3]//16)*100000+(res[3]%16)*10000+
+                (res[2]//16)*1000+(res[2]%16)*100+(res[1]//16)*10+(res[1]%16))
 
     # Returns 10 bytes Firmware VERSION[3], ONOFF, DOOR, DISK, FILT, CAL
     def getFullStat(self):

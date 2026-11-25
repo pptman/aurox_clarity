@@ -68,6 +68,18 @@ e1 = cv2.getTickCount()
 t = (e1 - e0)/cv2.getTickFrequency()
 print(N,'cpu loop ',1000*t/N,' ms')
 
+# Original code modified for binned input image (runs on CPU)
+time.sleep(5)
+img2b = (img2[::2, ::2] + img2[1::2, ::2] + img2[::2, 1::2] + img2[1::2, 1::2]) / 4
+e0 = cv2.getTickCount()
+
+for i in range(N):
+    res2=cp2.process_cpu_binned(img2b, 0.95, bin_factor=2)
+
+e1 = cv2.getTickCount()
+t = (e1 - e0)/cv2.getTickFrequency()
+print(N,'cpu_binned loop ',1000*t/N,' ms')
+
 # GPU, passing 1 numpy image, convert to UMat, then take subimages
 time.sleep(5)
 e0 = cv2.getTickCount()

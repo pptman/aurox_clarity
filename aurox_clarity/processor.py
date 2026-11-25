@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+from numpy.polynomial.polynomial import polygrid2d, polyval2d
 
 class Processor:
     # Setup SimpleBlobDetector parameters - constant, so shared between instances.
@@ -162,7 +163,6 @@ class Processor:
         # Sum terms: 1, x, y, x^2, y^2, x*y, x^2*y, x*y^2, x^3, y^3
         # Use polygrid2d: ~5x quicker, may avoid fp error accumulation,
         # gives same result to within < 1ppm.
-        from numpy.polynomial.polynomial import polygrid2d
         p1 = np.ones(nmatch)
         px = pmatchl[:,0]
         py = pmatchl[:,1]
@@ -184,13 +184,32 @@ class Processor:
         # GPU memory deformation map
         self.defX = cv2.UMat(self.defXcpu)
         self.defY = cv2.UMat(self.defYcpu)
+        self._get_metrics(pmatchl, pmatchr, dmidl, dmidr, pcoeffs)
+
+    def _get_metrics(self, pmatchl, pmatchr, dmidl, dmidr, pcoeffs):
+        expl = int(self.width * self.height / (0.8122 * dmidl * dmidl))  # Calculate the expected number of penrose points
+        expr = int(self.width * self.height / (0.8122 * dmidr * dmidr))  # in the field of view based on their spacing
+        print(f'Matched {len(pmatchl)} of expected {expl} spots on left and {expr} spots on right.')
+        centre = np.array([self.defXcpu[self.height // 2, self.width // 2],
+                               self.defYcpu[self.height // 2, self.width // 2]])
+        print(f'Centre offset: {centre[0] - self.width / 2:.2f}, {centre[1] - self.height / 2:.2f} pixels')
+        rot_offs = np.array([self.defXcpu[3 * self.height // 4, self.width // 2],
+                            self.defYcpu[3 * self.height // 4, self.width // 2]])
+        rot = np.arctan2(rot_offs[0] - centre[0], rot_offs[1] - centre[1]) * 90 / np.pi
+        print(f'Rotation: {rot:.2f}°')
+        pmatchl_remapped = polyval2d(pmatchl[:, 0], pmatchl[:, 1], pcoeffs).T
+        residuals = pmatchr - pmatchl_remapped
+        rmse = np.sqrt(np.mean(residuals[:, 0] ** 2 + residuals[:, 1] ** 2))
+        print(f'RMSE of polynomial fit: {rmse:.3f} pixels')
+        maxe = np.max(np.hypot(residuals[:, 0], residuals[:, 1]))
+        print(f'Max error of polynomial fit: {maxe:.3f} pixels')
 
     def process(self, img, sub_factor=1.0):
         # Takes 1 combined numpy (Mat) array and converts to UMat on the fly from numpy subimages
         # OPENCV transparent interface will use OPENCL for processing
         # Approx 9.2 ms processing time on macbook pro (i7 + Intel Iris Pro)
         result = cv2.subtract(cv2.UMat(img[:,0:self.width]),
-                              cv2.remap(cv2.multiply(cv2.UMat(img[:,self.width:]),sub_factor),self.defX,self.defY,cv2.INTER_LINEAR,
+                              cv2.remap(cv2.multiply(cv2.UMat(img[:,self.width:]),sub_factor),self.defX,self.defY,cv2.INTER_CUBIC,
                                                      borderMode=cv2.BORDER_CONSTANT,borderValue=0))
         return result
 
@@ -199,10 +218,10 @@ class Processor:
         # OPENCV transparent interface will use OPENCL for processing
         # Approx 2.8 ms processing time on macbook pro (i7 + Intel Iris Pro), but your images need to be separate UMats already
         # result = cv2.subtract(img_l,
-        #                       cv2.remap(cv2.multiply(img_r,sub_factor),self.defX,self.defY,cv2.INTER_LINEAR,
+        #                       cv2.remap(cv2.multiply(img_r,sub_factor),self.defX,self.defY,cv2.INTER_CUBIC,
         #                                              borderMode=cv2.BORDER_CONSTANT,borderValue=0))
         result = cv2.scaleAdd(
-            cv2.remap(img_r, self.defX, self.defY, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0),
+            cv2.remap(img_r, self.defX, self.defY, cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=0),
             -sub_factor, img_l)
         return result
 
@@ -215,7 +234,7 @@ class Processor:
         img_l = cv2.UMat(uimg, (0, self.height), (0, self.width))
         img_r = cv2.UMat(uimg, (0, self.height), (self.width, 2*self.width))
         result = cv2.subtract(img_l,
-                              cv2.remap(cv2.multiply(img_r,sub_factor),self.defX,self.defY,cv2.INTER_LINEAR,
+                              cv2.remap(cv2.multiply(img_r,sub_factor),self.defX,self.defY,cv2.INTER_CUBIC,
                                                      borderMode=cv2.BORDER_CONSTANT,borderValue=0))
         return result
 
@@ -227,17 +246,30 @@ class Processor:
         uimg = cv2.UMat(img)
         img_l = cv2.UMat(uimg, (0, self.height), (0, self.width))
         img_r = cv2.UMat(uimg, (0, self.height), (self.width, 2*self.width))
-        result = cv2.scaleAdd(cv2.remap(img_r,self.defX,self.defY,cv2.INTER_LINEAR,borderMode=cv2.BORDER_CONSTANT,borderValue=0),
+        result = cv2.scaleAdd(cv2.remap(img_r,self.defX,self.defY,cv2.INTER_CUBIC,borderMode=cv2.BORDER_CONSTANT,borderValue=0),
                               -sub_factor,img_l)
         return result
 
     def process_cpu(self, img, sub_factor=1.0):
-        # Takes 1 combined numpy (Mat) array and converts to UMat on the fly from numpy subimages
-        # OPENCV transparent interface will use OPENCL for processing
+        # Takes 1 combined numpy (Mat) array
         # Approx 7.2 ms processing time on macbook pro (i7 + Intel Iris Pro)
         result = cv2.subtract(img[:,0:self.width],
-                              cv2.remap(cv2.multiply(img[:,self.width:],sub_factor),self.defXcpu,self.defYcpu,cv2.INTER_LINEAR,
+                              cv2.remap(cv2.multiply(img[:,self.width:],sub_factor),self.defXcpu,self.defYcpu,cv2.INTER_CUBIC,
                                                      borderMode=cv2.BORDER_CONSTANT,borderValue=0))
+        return result
+
+    def process_cpu_binned(self, img, sub_factor=1.0, bin_factor=2):
+        # Takes 1 combined numpy (Mat) array
+        # Approx 7.2 ms processing time on macbook pro (i7 + Intel Iris Pro)
+        # Assumes input image is already binned by bin_factor
+        # Calculates binned deformation maps on the fly but these could be pre-calculated for speed
+        # bin_factor could be calculated from width of input array compared to self.width * 2
+        defXcpubin = self.defXcpu[::bin_factor, ::bin_factor] / bin_factor - (bin_factor - 1) / bin_factor
+        defYcpubin = self.defYcpu[::bin_factor, ::bin_factor] / bin_factor
+        width = int(self.width // (bin_factor))
+        result = cv2.subtract(img[:,:width],
+                              cv2.remap(cv2.multiply(img[:,width:], sub_factor), defXcpubin, defYcpubin,
+                                        cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=0))
         return result
 
     def process_cpu1(self, img, sub_factor=1.0):
@@ -245,7 +277,7 @@ class Processor:
         # OPENCV transparent interface will use OPENCL for processing
         # Approx 7.2 ms processing time on macbook pro (i7 + Intel Iris Pro)
         result = cv2.scaleAdd(
-            cv2.remap(img[:,self.width:], self.defXcpu, self.defYcpu, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0),
+            cv2.remap(img[:,self.width:], self.defXcpu, self.defYcpu, cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=0),
             -sub_factor, img[:,0:self.width])
         return result
 
